@@ -26,25 +26,35 @@ export default function CategoryPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!slug) return;
+      
       setIsLoading(true);
       setError(null);
       
       try {
-        // Récupération de la catégorie
-        const categoryRes = await fetch(`http://localhost:4000/api/categories/slug/${slug}`);
-        if (!categoryRes.ok) {
+        // Récupérer la catégorie par son slug avec ses sous-catégories
+        const categoryResponse = await fetch(`http://localhost:4000/api/categories/slug/${slug}?populate=subcategories`);
+        if (!categoryResponse.ok) {
           throw new Error('Catégorie non trouvée');
         }
-        const categoryData = await categoryRes.json();
+        const categoryData = await categoryResponse.json();
         setCategory(categoryData);
 
-        // Récupération des produits par ID de catégorie
-        const productsRes = await fetch(`http://localhost:4000/api/products?category=${categoryData._id}`);
-        if (!productsRes.ok) {
+        // Récupérer les produits de la catégorie et de ses sous-catégories
+        let productsResponse;
+        
+        // Si la catégorie a des sous-catégories, on filtre par ces sous-catégories
+        if (categoryData.subcategories && categoryData.subcategories.length > 0) {
+          const subcategoryIds = categoryData.subcategories.map(sub => sub._id);
+          productsResponse = await fetch(`http://localhost:4000/api/products?subcategory=${subcategoryIds.join(',')}`);
+        } else {
+          // Si pas de sous-catégories, on filtre par la catégorie principale
+          productsResponse = await fetch(`http://localhost:4000/api/products?category=${categoryData._id}`);
+        }
+        
+        if (!productsResponse.ok) {
           throw new Error('Erreur lors du chargement des produits');
         }
-        const productsData = await productsRes.json();
-        
+        const productsData = await productsResponse.json();
         // Vérification que productsData est bien un tableau
         if (!Array.isArray(productsData)) {
           throw new Error('Format de données invalide pour les produits');
@@ -152,24 +162,49 @@ export default function CategoryPage() {
   // Affichage normal
   return (
     <Layout>
-      {category ? (
-        <>
-          <CategoryBanner category={category} />
-          <div className="container mx-auto px-4 py-8">
-            <div className="flex flex-col lg:flex-row gap-8">
-              <aside className="lg:w-1/4">
-                <ProductFilters 
-                  filters={filters} 
-                  onFiltersChange={setFilters}
-                  subcategories={category.subcategories || []}
-                />
-              </aside>
-              <main className="lg:w-3/4">
-                <ProductGrid products={Array.isArray(filteredProducts) ? filteredProducts : []} />
-              </main>
-            </div>
+      {isLoading ? (
+        <div className="container mx-auto px-4 py-12 text-center">
+          <p className="text-gray-600">Chargement en cours...</p>
+        </div>
+      ) : error ? (
+        <div className="container mx-auto px-4 py-12 text-center">
+          <p className="text-red-600">{error}</p>
+        </div>
+      ) : category ? (
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-6">
+            <button 
+              onClick={() => window.history.back()}
+              className="flex items-center text-gray-600 hover:text-gray-900 transition-colors mb-3 px-3 py-2 rounded-lg hover:bg-gray-100"
+              aria-label="Retour"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span className="text-base font-medium">Retour</span>
+            </button>
+            <h1 className="text-3xl font-bold">{category.name}</h1>
           </div>
-        </>
+          
+          <div className="flex flex-col lg:flex-row gap-6">
+            <aside className="lg:w-1/4">
+              <ProductFilters 
+                filters={filters} 
+                onFiltersChange={setFilters}
+                subcategories={category.subcategories || []}
+              />
+            </aside>
+            <main className="lg:w-3/4">
+              {filteredProducts.length > 0 ? (
+                <ProductGrid products={filteredProducts} />
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-600 text-lg">Aucun produit disponible pour cette catégorie</p>
+                </div>
+              )}
+            </main>
+          </div>
+        </div>
       ) : (
         <div className="container mx-auto px-4 py-12 text-center">
           <p className="text-gray-600">Catégorie non trouvée</p>

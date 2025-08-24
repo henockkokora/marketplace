@@ -225,14 +225,34 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET all active products (for clients)
+// GET all active products (for clients) with optional filtering
 router.get('/', async (req, res) => {
   try {
-    const products = await Product.find({ status: 'active' }).populate('category')
-    res.json(products)
+    const { category, subcategory } = req.query;
+    const query = { status: 'active' };
+
+    // Si un filtre de catégorie est fourni
+    if (category) {
+      query.category = category;
+    }
+
+    // Si un filtre de sous-catégorie est fourni
+    if (subcategory) {
+      const subcategories = Array.isArray(subcategory) ? subcategory : [subcategory];
+      query.subcategory = { $in: subcategories };
+    }
+
+    const products = await Product.find(query)
+      .populate('category')
+      .populate('subcategory');
+      
+    res.json(products);
   } catch (err) {
     console.error('Erreur lors de la récupération des produits actifs:', err);
-    res.status(500).json({ error: 'Erreur serveur lors de la récupération des produits' })
+    res.status(500).json({ 
+      error: 'Erreur serveur lors de la récupération des produits',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 })
 
